@@ -167,6 +167,8 @@ same shading in WGSL for WebGPU and GLSL for WebGL 2. WebGPU is tried first,
 WebGL 2 takes over where it is missing or its device is lost, and
 `?renderer=webgl` pins the fallback. Its maths follow three.js r186 closely;
 `vendor/gfx/LICENSE` says which parts are ported.
+The shaders are plain `.glsl` and `.wgsl` files under `vendor/gfx/shaders/`,
+put together per draw by `glsl.js` and `wgsl.js`.
 
 ## The transport seam
 
