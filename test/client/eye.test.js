@@ -7,10 +7,11 @@ import {
   IDLE_GESTURES, LIMIT, PAN_SPEED, ROLL, TRACK_HOLD, TUMBLE, createAttention, easeInOut, modeFor,
 } from '../../src/client/eye/attention.js';
 import { anglesOf, clampOffset, offsetFrom, pointerOffset, wrap } from '../../src/client/eye/gaze.js';
-import { FLOAT, createAlan } from '../../src/client/eye/index.js';
+import { SKY_DRIFT, ZOOM, createAlan } from '../../src/client/eye/index.js';
 import { IRIS, RINGS, paintIris } from '../../src/client/eye/iris.js';
 import { IRIS_DEPTH, IRIS_RADIUS, RADIUS } from '../../src/client/eye/model.js';
 import { ENERGY_GAIN, GLOW_MAX, MOODS } from '../../src/client/eye/moods.js';
+import { HORIZON, SKY, cloudTexels, glowTexels, paintSky, skyColour } from '../../src/client/eye/sky.js';
 
 /** A seeded generator, so a behaviour test runs the same way every time. */
 function seeded(seed = 1) {
@@ -273,6 +274,119 @@ describe('the iris', () => {
   });
 });
 
+describe('the sky', () => {
+  const luminance = (hex) => {
+    const c = new GFX.Color(hex);
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  };
+
+  it('keeps the night darker than the iris, so the eye is the brightest thing in it', () => {
+    for (const [name, hex] of Object.entries(SKY)) {
+      if (['milky', 'core', 'town'].includes(name)) continue;
+      assert.ok(luminance(hex) < luminance(IRIS.mid) / 2, `${name} is too bright`);
+    }
+  });
+
+  it('is darkest overhead and underneath, and glows at the horizon', () => {
+    const level = (lat) => skyColour(lat).reduce((a, b) => a + b, 0);
+    assert.ok(level(HORIZON) > level(Math.PI / 2));
+    assert.ok(level(HORIZON) > level(-Math.PI / 2));
+    assert.ok(level(HORIZON) > level(HORIZON + 0.4) && level(HORIZON) > level(HORIZON - 0.4));
+    for (let lat = -Math.PI / 2; lat < Math.PI / 2; lat += 0.001) {
+      const step = skyColour(lat + 0.001).map((v, i) => Math.abs(v - skyColour(lat)[i]));
+      assert.ok(Math.max(...step) < 2, `the ramp jumps at ${lat.toFixed(3)}`);
+    }
+  });
+
+  it('lays a cloud sea under the horizon: solid haze far off, banks and gaps nearer', () => {
+    const cols = 512;
+    const rows = 160;
+    const pitch = (Math.PI / 2 + HORIZON) / rows;
+    const data = new Uint8ClampedArray(cols * rows * 4);
+    cloudTexels(data, cols, rows, { pitch, random: seeded(5) });
+    const alpha = (j) => Array.from({ length: cols }, (_, i) => data[(j * cols + i) * 4 + 3]);
+    assert.ok(Math.min(...alpha(0)) > 230, 'the horizon has holes in it');
+    const near = alpha(Math.round(rows * 0.3));
+    assert.ok(near.some((a) => a < 40), 'the clouds have no gaps');
+    assert.ok(near.some((a) => a > 220), 'there are no clouds');
+    for (let i = 0; i < data.length; i += 4) {
+      assert.ok(data[i + 2] >= data[i], 'a cloud is not blue');
+    }
+  });
+
+  it('wraps the clouds round without a seam', () => {
+    const cols = 512;
+    const rows = 64;
+    const data = new Uint8ClampedArray(cols * rows * 4);
+    cloudTexels(data, cols, rows, { pitch: 0.01, random: seeded(6) });
+    for (let j = 0; j < rows; j++) {
+      const alpha = (i) => data[(j * cols + i) * 4 + 3];
+      let steepest = 0;
+      for (let i = 1; i < cols; i++) steepest = Math.max(steepest, Math.abs(alpha(i) - alpha(i - 1)));
+      assert.ok(Math.abs(alpha(0) - alpha(cols - 1)) <= steepest + 1, `row ${j} is torn where it meets itself`);
+    }
+  });
+
+  it('adds the Milky Way as a band, and nothing below the horizon', () => {
+    const cols = 256;
+    const rows = 128;
+    const pitch = Math.PI / 2 / rows * 2;
+    const data = new Uint8ClampedArray(cols * rows * 4);
+    glowTexels(data, cols, rows, { pitch, random: seeded(7) });
+    let lit = 0;
+    for (let j = 0; j < rows; j++) {
+      const lat = Math.PI / 2 - (j + 0.5) * pitch;
+      for (let i = 0; i < cols; i++) {
+        const v = data[(j * cols + i) * 4 + 2];
+        if (lat < HORIZON) assert.equal(v, 0, 'light under the horizon');
+        else if (v > 3) lit++;
+      }
+    }
+    assert.ok(lit > 0, 'no Milky Way');
+    assert.ok(lit < cols * rows * 0.4, 'the band is the whole sky');
+  });
+
+  it('paints the same night from the same seed', () => {
+    const record = () => {
+      const calls = [];
+      const images = [];
+      const ctx = () => new Proxy({}, {
+        get: (_, name) => {
+          if (name === 'createImageData') {
+            return (w, h) => {
+              const image = { data: new Uint8ClampedArray(w * h * 4) };
+              images.push(image.data);
+              return image;
+            };
+          }
+          if (name === 'createPattern') return () => 'pattern';
+          return (...args) => calls.push([name, ...args.map((a) => (typeof a === 'object' ? 'canvas' : a))]);
+        },
+        set: (_, name, value) => { calls.push(['set', name, value]); return true; },
+      });
+      const layer = (width, height) => ({ width, height, getContext: ctx });
+      paintSky(ctx(), 512, 256, { random: seeded(13), layer });
+      return { calls, images };
+    };
+    const once = record();
+    assert.ok(once.calls.length > 1000, 'too little painted');
+    assert.equal(once.images.length, 3, 'clouds, glow and grain');
+    const twice = record();
+    assert.deepEqual(twice.calls, once.calls);
+    assert.deepEqual(twice.images, once.images);
+  });
+
+  it('paints only what needs no canvas of its own, given none', () => {
+    const calls = [];
+    const ctx = new Proxy({}, {
+      get: (_, name) => () => calls.push(name),
+      set: () => true,
+    });
+    assert.doesNotThrow(() => paintSky(ctx, 256, 128, { random: seeded(14) }));
+    assert.ok(!calls.includes('drawImage'));
+  });
+});
+
 describe('createAlan', () => {
   function stageWithCamera() {
     const scene = new GFX.Scene();
@@ -311,7 +425,7 @@ describe('createAlan', () => {
     return at.sub(centre).normalize();
   }
 
-  it('builds a named glass eye and floats it over its own shadow', () => {
+  it('builds a named glass eye, and hangs it in the sky with no floor under it', () => {
     const stage = stageWithCamera();
     createAlan({ stage, GFX, random: seeded(1), events: events() });
     const names = [];
@@ -320,8 +434,17 @@ describe('createAlan', () => {
     const glass = stage.object.getObjectByName('glass');
     assert.equal(glass.material.transmission, 1);
     assert.ok(glass.material.roughness < 0.1, 'the glass is frosted');
-    assert.ok(close(stage._ground.position.y, -RADIUS * (1 + FLOAT)));
+    assert.equal(stage._ground.visible, false, 'a shadow hangs in the air under it');
     assert.ok(stage._scene.getObjectByName('backdrop'), 'nothing behind the glass to refract');
+  });
+
+  it('lets the sky go by, slowly', () => {
+    const stage = stageWithCamera();
+    const alan = createAlan({ stage, GFX, random: seeded(12), events: events() });
+    const backdrop = stage._scene.getObjectByName('backdrop');
+    for (let i = 0; i < 600; i++) alan.step(0.05);
+    assert.ok(close(backdrop.rotation.y, 30 * SKY_DRIFT, 1e-9));
+    assert.ok((Math.PI * 2) / SKY_DRIFT > 20 * 60, 'the sky goes round faster than anyone could watch it');
   });
 
   it('looks at the viewer when nothing else is going on', () => {
@@ -394,6 +517,39 @@ describe('createAlan', () => {
     const portrait = distanceAt(9 / 19.5);
     assert.ok(close(landscape, square, 1e-9), 'a wide screen should keep the stage framing');
     assert.ok(portrait > landscape * 1.8, `${portrait} is not far enough back from ${landscape}`);
+  });
+
+  it('lets the view zoom right up to the glass but not through it, and out a long way but not for ever', () => {
+    const limitsAt = (aspect) => {
+      const stage = stageWithCamera();
+      stage._controls = { target: new GFX.Vector3(), minDistance: 0, maxDistance: Infinity };
+      stage._camera.aspect = aspect;
+      stage._camera.updateProjectionMatrix();
+      const alan = createAlan({ stage, GFX, random: seeded(15), events: events() });
+      alan.step(DT);
+      return { ...stage._controls, framed: stage._camera.position.length() };
+    };
+    const reach = Math.max(...Object.values(MOODS).map((m) => m.lean + m.drift + m.hover + m.bob))
+      + ENERGY_GAIN.bob + 0.35;
+    for (const aspect of [16 / 9, 9 / 19.5]) {
+      const { minDistance, maxDistance, framed } = limitsAt(aspect);
+      assert.ok(minDistance > RADIUS * (1 + reach), 'the camera can be zoomed into the glass');
+      assert.ok(minDistance < RADIUS * 2, 'the eye cannot be looked at up close');
+      assert.ok(minDistance < framed && framed < maxDistance, 'the framing is outside the limits');
+      assert.ok(close(maxDistance, framed * ZOOM.out, 1e-9));
+      assert.ok(maxDistance >= framed * 4, 'it can hardly be zoomed out at all');
+    }
+    assert.ok(limitsAt(9 / 19.5).maxDistance > limitsAt(16 / 9).maxDistance, 'a phone held upright cannot zoom out as far');
+  });
+
+  it('keeps the sky round the camera, wherever the camera goes', () => {
+    const stage = stageWithCamera();
+    createAlan({ stage, GFX, random: seeded(16), events: events() });
+    const backdrop = stage._scene.getObjectByName('backdrop');
+    stage._camera.position.set(40, 25, -90);
+    backdrop.onBeforeRender(null, stage._scene, stage._camera);
+    const at = new GFX.Vector3().setFromMatrixPosition(backdrop.matrixWorld);
+    assert.ok(at.distanceTo(stage._camera.position) < 1e-9, 'the camera has left the sky');
   });
 
   it('ignores a state it does not know, and stops listening when disposed', () => {

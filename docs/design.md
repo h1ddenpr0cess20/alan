@@ -52,14 +52,43 @@ caption they belong to.
 A sphere of clear glass with a blue iris suspended inside it. The glass is a
 transmissive physical material (index 1.5, all but perfectly smooth), and
 transmission only refracts what is opaque — so the iris and the pupil are
-opaque discs inside the ball, and behind everything hangs a dark backdrop, a
-big inside-out sphere with a little light high up. Without it the glass would
-bend the renderer's stand-in for "nothing here", a flat half-white, and clear
-glass would come out milky. The iris is painted once onto a canvas
-(`eye/iris.js`): pale at the collarette, deepening outwards, a dark limbal ring,
-radial fibres and a few crypts. The pupil is its own disc, so it can dilate.
+opaque discs inside the ball, and round everything hangs the night sky, on a
+big inside-out sphere. Without it the glass would bend the renderer's stand-in
+for "nothing here", a flat half-white, and clear glass would come out milky. The
+iris is painted once onto a canvas (`eye/iris.js`): pale at the collarette,
+deepening outwards, a dark limbal ring, radial fibres and a few crypts. The
+pupil is its own disc, so it can dilate.
 
 Nothing it does is a canned animation: every frame is springs chasing targets.
+
+## The sky
+
+Alan hangs high over a sea of cloud at night (`eye/sky.js`), painted once at
+startup onto a 4096 × 2048 equirectangular canvas — a different night each
+load. From that high the horizon has dropped twelve degrees below level, so it
+sits a third of the way down the screen and bows like the edge of the world.
+Above it, stars, thinning and dimming toward the horizon, and the Milky Way as a
+clumpy band with a dark lane. Below, the clouds are value noise on a level deck
+seen in perspective, big and soft underneath and crowding into haze toward the
+horizon; detail finer than a texel can hold is left out rather than aliased.
+Through the gaps a few towns are still lit, and they warm the haze above them.
+The glass refracts all of it, upside down, inside the ball.
+
+The soft parts — clouds, the Milky Way, the towns' glow — are worked out texel
+by texel on scratch canvases at a half and a quarter size, not stacked from
+canvas gradients: the browser dithers every gradient with the same fixed
+pattern, and a few hundred on top of one another add up to a visible grid. The
+long dark ramps are dithered with noise instead, so they don't band.
+
+The sphere turns once in about forty minutes, so the clouds drift past, and it
+is centred on the camera wherever the camera goes: the sky is as good as
+infinitely far off, so no zoom or pan ever reaches its edge. The stage's floor is
+hidden: there is nothing up there for a shadow to fall on.
+
+Zoom is bounded (`ZOOM` in `eye/index.js`): in, right up to the glass but not
+through it; out, to six times the distance it is framed at, which follows the
+framing, so a phone held upright gets the same room as a wide screen. Past that
+the eye would dwindle to nothing, and beyond the far plane vanish.
 
 ## States
 
@@ -128,6 +157,7 @@ src/
       motion.js           The spring and the chase every channel eases on
       model.js            The glass, the iris and the pupil; the backdrop
       iris.js             The blue iris, painted once onto a canvas
+      sky.js              The night round it, painted once onto a canvas
       environment.js      A cold studio for the glass to reflect
     session/            The call. Emits transport-agnostic events
       index.js            Lifecycle: mic, session, connect, meter, tear down

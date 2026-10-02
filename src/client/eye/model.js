@@ -1,7 +1,11 @@
 import { createIrisTexture, RINGS } from './iris.js';
+import { createSkyTexture, skyColour } from './sky.js';
 
 /** The eye, in metres of nothing in particular: the stage frames whatever size it is. */
 export const RADIUS = 0.8;
+
+/** The sky round the scene: far enough off that the eye's own drift doesn't move it. */
+const BACKDROP_RADIUS = 60;
 
 /**
  * Where the iris sits inside the glass, as fractions of the radius. A real
@@ -86,30 +90,35 @@ export function createEye(GFX, { random } = {}) {
 /**
  * What the glass has to refract. Left to itself a transmissive surface over a
  * transparent canvas shows a flat half-white — the renderer's stand-in for
- * "nothing behind" — and clear glass comes out milky. A dark room with a
- * little light high up gives it something true to bend instead.
+ * "nothing behind" — and clear glass comes out milky. A night sky round the
+ * whole of the scene (`sky.js`) gives it something true to bend instead.
+ * Where there is no canvas to paint that on, just its plain ramp, horizon and all.
  */
-export function createBackdrop(GFX, { top = '#16202f', horizon = '#0a0e16', bottom = '#040508' } = {}) {
-  const geometry = new GFX.SphereGeometry(60, 48, 32);
-  const position = geometry.attributes.position;
-  const colors = new Float32Array(position.count * 3);
-  const c = new GFX.Color();
-  const hi = new GFX.Color(top);
-  const mid = new GFX.Color(horizon);
-  const lo = new GFX.Color(bottom);
-  for (let i = 0; i < position.count; i++) {
-    const y = position.getY(i) / 60;
-    if (y >= 0) c.copy(mid).lerp(hi, Math.pow(y, 0.7));
-    else c.copy(mid).lerp(lo, Math.pow(-y, 0.5));
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
+export function createBackdrop(GFX, { random } = {}) {
+  const geometry = new GFX.SphereGeometry(BACKDROP_RADIUS, 128, 64);
+  const map = createSkyTexture(GFX, { random });
+  if (!map) {
+    const position = geometry.attributes.position;
+    const colors = new Float32Array(position.count * 3);
+    const c = new GFX.Color();
+    for (let i = 0; i < position.count; i++) {
+      const up = Math.max(-1, Math.min(1, position.getY(i) / BACKDROP_RADIUS));
+      const [r, g, b] = skyColour(Math.asin(up)).map(Math.round);
+      c.setHex((r << 16) | (g << 8) | b);
+      colors.set([c.r, c.g, c.b], i * 3);
+    }
+    geometry.setAttribute('color', new GFX.BufferAttribute(colors, 3));
   }
-  geometry.setAttribute('color', new GFX.BufferAttribute(colors, 3));
   const mesh = new GFX.Mesh(geometry, new GFX.MeshBasicMaterial({
-    name: 'backdrop', vertexColors: true, side: GFX.BackSide, depthWrite: false,
+    name: 'backdrop', map, vertexColors: !map, side: GFX.BackSide, depthWrite: false,
   }));
   mesh.name = 'backdrop';
   mesh.renderOrder = -1;
+  // As good as infinitely far off: wherever the camera is, the sky is round
+  // it. Set as it is drawn, so it holds however the camera got there.
+  mesh.onBeforeRender = (renderer, scene, camera) => {
+    mesh.position.copy(camera.position);
+    mesh.updateMatrixWorld();
+  };
   return mesh;
 }
