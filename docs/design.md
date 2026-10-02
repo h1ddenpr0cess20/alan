@@ -158,7 +158,7 @@ src/
       model.js            The glass, the iris and the pupil; the backdrop
       iris.js             The blue iris, painted once onto a canvas
       sky.js              The night round it, painted once onto a canvas
-      environment.js      A cold studio for the glass to reflect
+      environment.js      What the glass reflects: a wash, and no lamps
     session/            The call. Emits transport-agnostic events
       index.js            Lifecycle: mic, session, connect, meter, tear down
       webrtc.js           Peer connection, data channel, SDP handshake
