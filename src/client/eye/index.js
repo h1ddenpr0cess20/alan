@@ -16,16 +16,12 @@ const REACH = 2.2;
 export const STIFFNESS = Object.freeze({ saccade: 900, roll: 420, pan: 260, pursuit: 120 });
 
 /**
- * How far the view may be zoomed, as multiples of how far back it is framed.
- * In to half: the eye twice the size, close on the iris and well clear of the
- * glass however far it leans and drifts. Out a little way, and no further:
- * past that the eye dwindles to a speck in the sky, and once the camera passes
- * the far plane it is gone.
+ * How far the view may be zoomed. In, to this many radii from the eye: right
+ * up to the glass, but never through it, however far it leans and drifts.
+ * Out, to this many times as far as it is framed: small against the night,
+ * but well short of dwindling to nothing.
  */
-export const ZOOM = Object.freeze({ in: 0.5, out: 1.6 });
-
-/** How far the view may be panned off the eye: half way from the middle of the view to its edge, at any zoom. */
-export const PAN = 0.5;
+export const ZOOM = Object.freeze({ in: 1.75, out: 6 });
 
 /** How fast the sky turns round the eye, in radians a second: once in about forty minutes. */
 export const SKY_DRIFT = 0.0026;
@@ -161,7 +157,7 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
     camera.far = distance * 100;
     camera.updateProjectionMatrix();
     if (stage._controls) {
-      stage._controls.minDistance = ZOOM.in * distance;
+      stage._controls.minDistance = ZOOM.in * R;
       stage._controls.maxDistance = ZOOM.out * distance;
     }
   }
@@ -253,24 +249,6 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
 
   stage.setObject(alan);
 
-  // Where the stage aimed the view. A pan may wander from it, but not so far
-  // that the eye goes out of sight: past that, the view is pulled back, camera
-  // and all, so it keeps looking the way it was.
-  const controls = stage._controls;
-  const centre = controls?.target.clone();
-  const stray = new GFX.Vector3();
-  function keepInView() {
-    const camera = stage._camera;
-    const reach = PAN * Math.tan((camera.fov * Math.PI) / 360) * camera.position.distanceTo(controls.target);
-    stray.copy(controls.target).sub(centre);
-    const off = stray.length();
-    if (off <= reach) return;
-    stray.multiplyScalar(1 - reach / off);
-    controls.target.sub(stray);
-    camera.position.sub(stray);
-  }
-  controls?.addEventListener?.('change', keepInView);
-
   // Everything below is added after the stage has framed the eye, so none of
   // it counts toward the framing: the sky and the aura. Up here there is no
   // floor for a shadow to fall on, so the stage's own is put out of sight.
@@ -325,7 +303,6 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
       events.removeEventListener?.('pointermove', onMove);
       events.removeEventListener?.('pointerdown', onMove);
       events.removeEventListener?.('pointerout', onOut);
-      controls?.removeEventListener?.('change', keepInView);
     },
   };
 }

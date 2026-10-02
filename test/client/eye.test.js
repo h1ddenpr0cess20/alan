@@ -7,7 +7,7 @@ import {
   IDLE_GESTURES, LIMIT, PAN_SPEED, ROLL, TRACK_HOLD, TUMBLE, createAttention, easeInOut, modeFor,
 } from '../../src/client/eye/attention.js';
 import { anglesOf, clampOffset, offsetFrom, pointerOffset, wrap } from '../../src/client/eye/gaze.js';
-import { PAN, SKY_DRIFT, ZOOM, createAlan } from '../../src/client/eye/index.js';
+import { SKY_DRIFT, ZOOM, createAlan } from '../../src/client/eye/index.js';
 import { IRIS, RINGS, paintIris } from '../../src/client/eye/iris.js';
 import { IRIS_DEPTH, IRIS_RADIUS, RADIUS } from '../../src/client/eye/model.js';
 import { ENERGY_GAIN, GLOW_MAX, MOODS } from '../../src/client/eye/moods.js';
@@ -519,7 +519,7 @@ describe('createAlan', () => {
     assert.ok(portrait > landscape * 1.8, `${portrait} is not far enough back from ${landscape}`);
   });
 
-  it('lets the view zoom in close, but not into the glass, and out only so far', () => {
+  it('lets the view zoom right up to the glass but not through it, and out a long way but not for ever', () => {
     const limitsAt = (aspect) => {
       const stage = stageWithCamera();
       stage._controls = { target: new GFX.Vector3(), minDistance: 0, maxDistance: Infinity };
@@ -534,9 +534,10 @@ describe('createAlan', () => {
     for (const aspect of [16 / 9, 9 / 19.5]) {
       const { minDistance, maxDistance, framed } = limitsAt(aspect);
       assert.ok(minDistance > RADIUS * (1 + reach), 'the camera can be zoomed into the glass');
+      assert.ok(minDistance < RADIUS * 2, 'the eye cannot be looked at up close');
       assert.ok(minDistance < framed && framed < maxDistance, 'the framing is outside the limits');
-      assert.ok(close(minDistance, framed * ZOOM.in, 1e-9));
       assert.ok(close(maxDistance, framed * ZOOM.out, 1e-9));
+      assert.ok(maxDistance >= framed * 4, 'it can hardly be zoomed out at all');
     }
     assert.ok(limitsAt(9 / 19.5).maxDistance > limitsAt(16 / 9).maxDistance, 'a phone held upright cannot zoom out as far');
   });
@@ -549,38 +550,6 @@ describe('createAlan', () => {
     backdrop.onBeforeRender(null, stage._scene, stage._camera);
     const at = new GFX.Vector3().setFromMatrixPosition(backdrop.matrixWorld);
     assert.ok(at.distanceTo(stage._camera.position) < 1e-9, 'the camera has left the sky');
-  });
-
-  it('lets the view be panned a little, but never off the eye', () => {
-    const stage = stageWithCamera();
-    const listeners = {};
-    stage._controls = {
-      target: new GFX.Vector3(),
-      addEventListener: (type, fn) => { (listeners[type] ??= []).push(fn); },
-      removeEventListener: (type, fn) => { listeners[type] = listeners[type].filter((f) => f !== fn); },
-    };
-    const alan = createAlan({ stage, GFX, random: seeded(17), events: events() });
-    alan.step(DT);
-    const { target } = stage._controls;
-    const camera = stage._camera;
-    const away = camera.position.clone().sub(target);
-    const reach = PAN * Math.tan((camera.fov * Math.PI) / 360) * away.length();
-
-    const nudge = new GFX.Vector3(reach / 2, 0, 0);
-    target.add(nudge);
-    camera.position.add(nudge);
-    listeners.change.forEach((fn) => fn());
-    assert.ok(close(target.x, reach / 2), 'a small pan was undone');
-
-    const shove = new GFX.Vector3(0, 50, 0);
-    target.add(shove);
-    camera.position.add(shove);
-    listeners.change.forEach((fn) => fn());
-    assert.ok(target.length() <= reach + 1e-9, 'the view was panned off the eye');
-    assert.ok(camera.position.clone().sub(target).distanceTo(away) < 1e-9, 'pulling it back turned the view');
-
-    alan.dispose();
-    assert.equal(listeners.change.length, 0);
   });
 
   it('ignores a state it does not know, and stops listening when disposed', () => {

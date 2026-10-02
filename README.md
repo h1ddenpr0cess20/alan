@@ -49,10 +49,9 @@ survives that too. Holding the mic down is the hang-up — a ring closes around 
 while you hold, and the call ends when it lands.
 
 The eye watches the pointer over the whole page, not just the 3D view. Drag on
-the view to orbit round it (it keeps its eye on you), wheel to zoom — in to
-twice the size, out only a little — and right-drag to pan, never so far that the
-eye leaves the view. On a phone it follows your finger while you touch, and
-surveys the room when you let go.
+the view to orbit round it (it keeps its eye on you), wheel to zoom, right-drag
+to pan. On a phone it follows your finger while you touch, and surveys the room
+when you let go.
 
 `menu`, in the top corner, is where the panels live: `tools`, `memory` and the
 log, one row each. Picking a row closes the menu behind it.

@@ -85,11 +85,10 @@ is centred on the camera wherever the camera goes: the sky is as good as
 infinitely far off, so no zoom or pan ever reaches its edge. The stage's floor is
 hidden: there is nothing up there for a shadow to fall on.
 
-The view is held in bounds as well (`ZOOM` and `PAN` in `eye/index.js`): zoom in
-to half the distance it is framed at and out to 1.6 times it, and pan no further
-than halfway from the middle of the view to its edge. Both follow the framing,
-so a phone held upright gets the same room as a wide screen, and the eye is
-never lost.
+Zoom is bounded (`ZOOM` in `eye/index.js`): in, right up to the glass but not
+through it; out, to six times the distance it is framed at, which follows the
+framing, so a phone held upright gets the same room as a wide screen. Past that
+the eye would dwindle to nothing, and beyond the far plane vanish.
 
 ## States
 
