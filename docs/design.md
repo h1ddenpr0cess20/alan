@@ -80,8 +80,16 @@ canvas gradients: the browser dithers every gradient with the same fixed
 pattern, and a few hundred on top of one another add up to a visible grid. The
 long dark ramps are dithered with noise instead, so they don't band.
 
-The sphere turns once in about forty minutes, so the clouds drift past. The
-stage's floor is hidden: there is nothing up there for a shadow to fall on.
+The sphere turns once in about forty minutes, so the clouds drift past, and it
+is centred on the camera wherever the camera goes: the sky is as good as
+infinitely far off, so no zoom or pan ever reaches its edge. The stage's floor is
+hidden: there is nothing up there for a shadow to fall on.
+
+The view is held in bounds as well (`ZOOM` and `PAN` in `eye/index.js`): zoom in
+to half the distance it is framed at and out to 1.6 times it, and pan no further
+than halfway from the middle of the view to its edge. Both follow the framing,
+so a phone held upright gets the same room as a wide screen, and the eye is
+never lost.
 
 ## States
 

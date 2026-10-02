@@ -114,5 +114,11 @@ export function createBackdrop(GFX, { random } = {}) {
   }));
   mesh.name = 'backdrop';
   mesh.renderOrder = -1;
+  // As good as infinitely far off: wherever the camera is, the sky is round
+  // it. Set as it is drawn, so it holds however the camera got there.
+  mesh.onBeforeRender = (renderer, scene, camera) => {
+    mesh.position.copy(camera.position);
+    mesh.updateMatrixWorld();
+  };
   return mesh;
 }
