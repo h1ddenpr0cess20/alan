@@ -5,9 +5,6 @@ import { createBackdrop, createEye, RADIUS } from './model.js';
 import { ENERGY_GAIN, GLOW_MAX, MOODS } from './moods.js';
 import { approach, spring } from './motion.js';
 
-/** How high it floats over its own shadow, in radii. */
-export const FLOAT = 0.6;
-
 /** How far in front of the eye the pointer's plane sits, in radii (see `pointerOffset`). */
 const REACH = 2.2;
 
@@ -17,6 +14,9 @@ const REACH = 2.2;
  * that moves, a pan is the survey's slow sweep.
  */
 export const STIFFNESS = Object.freeze({ saccade: 900, roll: 420, pan: 260, pursuit: 120 });
+
+/** How fast the sky turns round the eye, in radians a second: once in about forty minutes. */
+export const SKY_DRIFT = 0.0026;
 
 /** A pursuit target further off than this is jumped to, not followed. */
 const SACCADE_JUMP = 0.3;
@@ -99,6 +99,7 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
   let t = 0;
   let lastMove = -Infinity;
   let halo = null;
+  let backdrop = null;
   let fitted = null;
   const timer = new GFX.Timer();
 
@@ -224,6 +225,9 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
     const glow = m.glow + energy * ENERGY_GAIN.glow + flare + thinking;
     irisMaterial.emissiveIntensity = Math.min(GLOW_MAX, glow);
     if (halo) halo.material.opacity = Math.min(0.9, 0.08 + glow * 0.9);
+
+    // The night goes by: the clouds drift, and the stars turn with them.
+    if (backdrop) backdrop.rotation.y = t * SKY_DRIFT;
   }
 
   glass.onBeforeRender = () => {
@@ -234,10 +238,12 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
   stage.setObject(alan);
 
   // Everything below is added after the stage has framed the eye, so none of
-  // it counts toward the framing: the float, the room, the aura.
-  if (stage._ground) stage._ground.position.y = -R * (1 + FLOAT);
+  // it counts toward the framing: the sky and the aura. Up here there is no
+  // floor for a shadow to fall on, so the stage's own is put out of sight.
+  if (stage._ground) stage._ground.visible = false;
   if (stage._scene?.add) {
-    stage._scene.add(createBackdrop(GFX));
+    backdrop = createBackdrop(GFX, { random });
+    stage._scene.add(backdrop);
     const map = radialTexture(GFX, [[0, 0], [0.34, 0], [0.4, 0.5], [0.55, 0.16], [0.8, 0.03], [1, 0]]);
     if (map) {
       halo = new GFX.Sprite(new GFX.SpriteMaterial({
