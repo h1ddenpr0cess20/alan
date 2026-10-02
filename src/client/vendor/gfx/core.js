@@ -309,6 +309,8 @@ export class Scene extends Object3D {
     this.type = 'Scene';
     /** The prefiltered studio the physical materials reflect — from a PMREMGenerator. */
     this.environment = null;
+    /** How that studio is turned in the world, as three's `Scene.environmentRotation` is. */
+    this.environmentRotation = new Euler();
   }
 }
 Scene.prototype.isScene = true;

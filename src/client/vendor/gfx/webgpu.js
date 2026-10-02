@@ -23,7 +23,7 @@ import { pmremLayout, pmremPlanes, pmremSchedule } from './pmrem.js';
 const SAMPLES = 4;
 const DEPTH_FORMAT = 'depth24plus';
 const FRAME_SIZE = 1040;
-const DRAW_SIZE = 416;
+const DRAW_SIZE = 464;
 const OBJECT_SIZE = 320;
 const ARENA_SIZE = 4 << 20;
 const ALIGN = 256;
@@ -390,6 +390,7 @@ export class WebGPUBackend {
     f.set(p.center ?? [0.5, 0.5], o + 100);
     f[o + 102] = p.rotation ?? 0;
     f[o + 103] = finite ? 1 : 0;
+    setMat3(f, o + 104, p.envMapRotation ?? IDENTITY3);
   }
 
   _packObject(offset, call) {

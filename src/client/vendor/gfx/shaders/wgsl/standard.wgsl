@@ -99,7 +99,7 @@ fn vs(in: VertexInput) -> Varyings {
 #ifdef USE_ENVMAP
 fn getIBLIrradiance(normal: vec3f) -> vec3f {
   let worldNormal = transformNormalByInverseViewMatrix(normal, u_frame.viewMatrix);
-  let envMapColor = textureCubeUV(t_env, worldNormal, 1.0);
+  let envMapColor = textureCubeUV(t_env, u_draw.envMapRotation * worldNormal, 1.0);
   return PI * envMapColor.rgb * u_draw.envMapIntensity;
 }
 
@@ -107,7 +107,7 @@ fn getIBLRadiance(viewDir: vec3f, normal: vec3f, roughness: f32) -> vec3f {
   var reflectVec = reflect(-viewDir, normal);
   reflectVec = normalize(mix(reflectVec, normal, pow4(roughness)));
   reflectVec = transformNormalByInverseViewMatrix(reflectVec, u_frame.viewMatrix);
-  let envMapColor = textureCubeUV(t_env, reflectVec, roughness);
+  let envMapColor = textureCubeUV(t_env, u_draw.envMapRotation * reflectVec, roughness);
   return envMapColor.rgb * u_draw.envMapIntensity;
 }
 #endif

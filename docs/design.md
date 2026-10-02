@@ -74,16 +74,32 @@ horizon; detail finer than a texel can hold is left out rather than aliased.
 Through the gaps a few towns are still lit, and they warm the haze above them.
 The glass refracts all of it, upside down, inside the ball.
 
+Straight overhead is the sun: a white disc in a glare that dies away over a few
+degrees. That high up the air is too thin to make a day of it, so the sky stays
+black round it and the stars stay out. It is the eye's light: the stage's key
+light is moved up to where it is, and the stage's fill — a lamp low behind, with
+nothing in the sky for it to be — is put out. Only the stage's soft wash stays,
+and it puts no glint on anything. The clear glass casts no shadow, so the sun
+reaches the iris through it.
+
+What the glass reflects is the same night, copied small from the painted sky
+and prefiltered (`eye/environment.js`): the cloud sea in the bottom of the ball,
+the dark in the top, and the glint high on it the sun's own. The copy is the
+mirror image of the canvas, because a sphere wraps a map round the other way to
+the way a reflection reads one, and `scene.environmentRotation` turns it with the
+backdrop, so what the glass shows stays where the sky has it.
+
 The soft parts — clouds, the Milky Way, the towns' glow — are worked out texel
 by texel on scratch canvases at a half and a quarter size, not stacked from
 canvas gradients: the browser dithers every gradient with the same fixed
 pattern, and a few hundred on top of one another add up to a visible grid. The
 long dark ramps are dithered with noise instead, so they don't band.
 
-The sphere turns once in about forty minutes, so the clouds drift past, and it
-is centred on the camera wherever the camera goes: the sky is as good as
-infinitely far off, so no zoom or pan ever reaches its edge. The stage's floor is
-hidden: there is nothing up there for a shadow to fall on.
+The sphere turns once in about forty minutes, so the clouds drift past — round
+the sun, which being overhead stays put — and it is centred on the camera
+wherever the camera goes: the sky is as good as infinitely far off, so no zoom
+or pan ever reaches its edge. The stage's floor is hidden: there is nothing up
+there for a shadow to fall on.
 
 Zoom is bounded (`ZOOM` in `eye/index.js`): in, right up to the glass but not
 through it; out, to six times the distance it is framed at, which follows the
@@ -158,7 +174,7 @@ src/
       model.js            The glass, the iris and the pupil; the backdrop
       iris.js             The blue iris, painted once onto a canvas
       sky.js              The night round it, painted once onto a canvas
-      environment.js      What the glass reflects: a wash, and no lamps
+      environment.js      What the glass reflects, and the sun's light
     session/            The call. Emits transport-agnostic events
       index.js            Lifecycle: mic, session, connect, meter, tear down
       webrtc.js           Peer connection, data channel, SDP handshake

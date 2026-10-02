@@ -13,10 +13,13 @@
 import {
   AdditiveBlending, BackSide, DoubleSide, FrontSide, NormalBlending, PCFShadowMap,
 } from './core.js';
-import { Frustum, Matrix4, Vector3, Vector4 } from './math.js';
+import { Euler, Frustum, Matrix3, Matrix4, Vector3, Vector4 } from './math.js';
 import { pmremLayout } from './pmrem.js';
 
 const _projScreenMatrix = new Matrix4();
+const _envEuler = new Euler();
+const _envMatrix = new Matrix4();
+const _envRotation = new Matrix3();
 const _frustum = new Frustum();
 const _vector4 = new Vector4();
 const _vector3 = new Vector3();
@@ -154,13 +157,18 @@ export class Renderer {
     const shadowsOn = this.shadowMap.enabled && lists.shadows.length > 0;
     lists.lights.sort(shadowCastingLightsFirst);
     const env = scene.environment ? this._environment(scene.environment) : null;
+    // As three does: the lookup is turned back the other way, so the studio turns as asked.
+    const turn = scene.environmentRotation;
+    if (turn) _envEuler.set(-turn.x, -turn.y, -turn.z, turn.order);
+    else _envEuler.set(0, 0, 0);
+    const envRotation = _envRotation.setFromMatrix4(_envMatrix.makeRotationFromEuler(_envEuler)).elements;
     this.backend.beginFrame();
 
     let shadow = null;
     if (shadowsOn) shadow = this._renderShadows(scene, camera, lists.shadows);
 
     const lighting = this._setupLights(lists.lights, shadowsOn);
-    const context = { scene, camera, env, lighting, shadow };
+    const context = { scene, camera, env, envRotation, lighting, shadow };
 
     if (lists.transmissive.length > 0) {
       const size = [this.domElement.width, this.domElement.height];
@@ -467,6 +475,7 @@ function describe(object, geometry, material, side, context, frame) {
       roughness: material.roughness,
       metalness: material.metalness,
       envMapIntensity: context.scene.environmentIntensity ?? 1,
+      envMapRotation: Array.from(context.envRotation ?? IDENTITY3),
       receiveShadow: object.receiveShadow ? 1 : 0,
       mapTransform: transformOf(material.map),
       bumpMapTransform: transformOf(material.bumpMap),

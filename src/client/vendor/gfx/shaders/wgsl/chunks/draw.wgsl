@@ -30,4 +30,5 @@ struct Draw {
   center: vec2f,
   rotation: f32,
   attenuationFinite: f32,
+  envMapRotation: mat3x3f,
 };
