@@ -7,11 +7,13 @@ import {
   IDLE_GESTURES, LIMIT, PAN_SPEED, ROLL, TRACK_HOLD, TUMBLE, createAttention, easeInOut, modeFor,
 } from '../../src/client/eye/attention.js';
 import { anglesOf, clampOffset, offsetFrom, pointerOffset, wrap } from '../../src/client/eye/gaze.js';
+import { buildEnvironment } from '../../src/client/eye/environment.js';
 import { SKY_DRIFT, ZOOM, createAlan } from '../../src/client/eye/index.js';
 import { IRIS, RINGS, paintIris } from '../../src/client/eye/iris.js';
 import { IRIS_DEPTH, IRIS_RADIUS, RADIUS } from '../../src/client/eye/model.js';
 import { ENERGY_GAIN, GLOW_MAX, MOODS } from '../../src/client/eye/moods.js';
-import { HORIZON, SKY, cloudTexels, glowTexels, paintSky, skyColour } from '../../src/client/eye/sky.js';
+import { HORIZON, SKY, SUN, cloudTexels, glowTexels, paintSky, skyColour, sunAt } from '../../src/client/eye/sky.js';
+import { withGlobals } from '../helpers/dom.js';
 
 /** A seeded generator, so a behaviour test runs the same way every time. */
 function seeded(seed = 1) {
@@ -346,6 +348,18 @@ describe('the sky', () => {
     assert.ok(lit < cols * rows * 0.4, 'the band is the whole sky');
   });
 
+  it('hangs the sun straight overhead: a disc, and a glare that is gone well before the horizon', () => {
+    assert.equal(sunAt(0).disc, 1);
+    assert.equal(sunAt(SUN.radius * 2).disc, 0);
+    let last = Infinity;
+    for (let angle = 0; angle < Math.PI / 2 - HORIZON; angle += 0.01) {
+      const { glare } = sunAt(angle);
+      assert.ok(glare <= last, `the glare brightens again ${angle.toFixed(2)} from the zenith`);
+      last = glare;
+    }
+    assert.ok(sunAt(0.5).glare < 1 / 255, 'the sun makes a day of the sky');
+  });
+
   it('paints the same night from the same seed', () => {
     const record = () => {
       const calls = [];
@@ -392,13 +406,24 @@ describe('createAlan', () => {
     const scene = new GFX.Scene();
     const camera = new GFX.PerspectiveCamera(45, 4 / 3, 0.01, 500);
     const ground = new GFX.Mesh(new GFX.PlaneGeometry(10, 10), new GFX.ShadowMaterial());
+    const key = new GFX.DirectionalLight(0xffffff, 2.2);
+    key.position.set(4, 7, 5);
+    const fill = new GFX.DirectionalLight(0xfff4e6, 0.5);
+    fill.position.set(-5, 3, -4);
     const stage = {
       _scene: scene,
       _camera: camera,
       _ground: ground,
+      _key: key,
+      _fill: fill,
       _renderer: { domElement: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) } },
       object: null,
-      setObject(o) { this.object = o; scene.add(o); ground.position.y = -RADIUS; },
+      setObject(o) {
+        this.object = o;
+        o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+        scene.add(o);
+        ground.position.y = -RADIUS;
+      },
     };
     camera.position.set(0, 0, 5);
     camera.lookAt(0, 0, 0);
@@ -444,7 +469,19 @@ describe('createAlan', () => {
     const backdrop = stage._scene.getObjectByName('backdrop');
     for (let i = 0; i < 600; i++) alan.step(0.05);
     assert.ok(close(backdrop.rotation.y, 30 * SKY_DRIFT, 1e-9));
+    assert.equal(stage._scene.environmentRotation.y, backdrop.rotation.y, 'the glass shows a sky that has stood still');
     assert.ok((Math.PI * 2) / SKY_DRIFT > 20 * 60, 'the sky goes round faster than anyone could watch it');
+  });
+
+  it('is lit by the sun overhead, and by nothing else that would glint in the glass', () => {
+    const stage = stageWithCamera();
+    createAlan({ stage, GFX, random: seeded(15), events: events() });
+    const from = stage._key.position.clone().normalize();
+    assert.ok(close(from.y, 1), 'the light is not where the sun is');
+    assert.ok(stage._key.position.length() > 1, 'the light is inside the eye');
+    assert.equal(stage._fill.visible, false, 'a lamp behind the eye glints in the glass');
+    assert.equal(stage.object.getObjectByName('glass').castShadow, false, 'the clear glass shades the iris');
+    assert.equal(stage.object.getObjectByName('iris').castShadow, true);
   });
 
   it('looks at the viewer when nothing else is going on', () => {
@@ -560,5 +597,34 @@ describe('createAlan', () => {
     assert.equal(alan.state, 'idle');
     alan.dispose();
     assert.equal(ev.listeners.pointermove.length, 0);
+  });
+});
+
+describe('the reflection', () => {
+  it('is the sky itself, turned over the way a sphere wraps it', () => {
+    const calls = [];
+    const ctx = new Proxy({}, {
+      get: (_, name) => (...args) => calls.push([name, ...args.map((a) => (typeof a === 'object' ? 'canvas' : a))]),
+      set: () => true,
+    });
+    const restore = withGlobals({ document: { createElement: () => ({ getContext: () => ctx }) } });
+    try {
+      const scene = new GFX.Scene();
+      const stage = { _scene: scene, _renderer: { prefilterEquirectangular: (texture) => ({ source: texture }) } };
+      buildEnvironment({ stage, GFX, sky: { width: 4096, height: 2048 } });
+      const draw = calls.findIndex(([name]) => name === 'drawImage');
+      assert.ok(draw >= 0, 'nothing of the sky in it');
+      const flip = calls.findIndex(([name, x, y]) => name === 'scale' && x === -1 && y === 1);
+      assert.ok(flip >= 0 && flip < draw, 'the reflection is the mirror image of the sky round it');
+      assert.ok(scene.environment, 'nothing to reflect');
+    } finally {
+      restore();
+    }
+  });
+
+  it('is nothing at all, with no sky to copy', () => {
+    const scene = new GFX.Scene();
+    buildEnvironment({ stage: { _scene: scene }, GFX, sky: null });
+    assert.equal(scene.environment, null);
   });
 });

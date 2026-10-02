@@ -1,5 +1,5 @@
 import { createAttention } from './attention.js';
-import { buildEnvironment } from './environment.js';
+import { buildEnvironment, sunlight } from './environment.js';
 import { anglesOf, pointerOffset } from './gaze.js';
 import { createBackdrop, createEye, RADIUS } from './model.js';
 import { ENERGY_GAIN, GLOW_MAX, MOODS } from './moods.js';
@@ -72,10 +72,11 @@ function radialTexture(GFX, stops) {
  * test hands in something else.
  */
 export function createAlan({ stage, GFX, random = Math.random, events = globalThis }) {
-  buildEnvironment({ stage, GFX });
-
   const R = RADIUS;
   const { eye, glass, pupil, irisMaterial } = createEye(GFX, { random });
+  const backdrop = createBackdrop(GFX, { random });
+  buildEnvironment({ stage, GFX, sky: backdrop.material.map?.image });
+  sunlight(stage);
 
   const alan = new GFX.Group();
   alan.name = 'alan';
@@ -107,7 +108,6 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
   let t = 0;
   let lastMove = -Infinity;
   let halo = null;
-  let backdrop = null;
   let fitted = null;
   const timer = new GFX.Timer();
 
@@ -238,8 +238,10 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
     irisMaterial.emissiveIntensity = Math.min(GLOW_MAX, glow);
     if (halo) halo.material.opacity = Math.min(0.9, 0.08 + glow * 0.9);
 
-    // The night goes by: the clouds drift, and the stars turn with them.
-    if (backdrop) backdrop.rotation.y = t * SKY_DRIFT;
+    // The night goes by: the clouds drift, and the stars turn with them —
+    // in the glass as well as round it.
+    backdrop.rotation.y = t * SKY_DRIFT;
+    if (stage._scene?.environmentRotation) stage._scene.environmentRotation.y = backdrop.rotation.y;
   }
 
   glass.onBeforeRender = () => {
@@ -248,13 +250,14 @@ export function createAlan({ stage, GFX, random = Math.random, events = globalTh
   };
 
   stage.setObject(alan);
+  // Clear glass lets the sun through: a shadow from it would black out the iris.
+  glass.castShadow = false;
 
   // Everything below is added after the stage has framed the eye, so none of
   // it counts toward the framing: the sky and the aura. Up here there is no
   // floor for a shadow to fall on, so the stage's own is put out of sight.
   if (stage._ground) stage._ground.visible = false;
   if (stage._scene?.add) {
-    backdrop = createBackdrop(GFX, { random });
     stage._scene.add(backdrop);
     const map = radialTexture(GFX, [[0, 0], [0.34, 0], [0.4, 0.5], [0.55, 0.16], [0.8, 0.03], [1, 0]]);
     if (map) {

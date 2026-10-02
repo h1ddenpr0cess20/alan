@@ -114,11 +114,12 @@ uniform vec3 ambientLightColor;
 #ifdef USE_ENVMAP
   uniform sampler2D envMap;
   uniform float envMapIntensity;
+  uniform mat3 envMapRotation;
   #include <cube_uv>
 
   vec3 getIBLIrradiance( const in vec3 normal ) {
     vec3 worldNormal = transformNormalByInverseViewMatrix( normal, viewMatrix );
-    vec4 envMapColor = textureCubeUV( envMap, worldNormal, 1.0 );
+    vec4 envMapColor = textureCubeUV( envMap, envMapRotation * worldNormal, 1.0 );
     return PI * envMapColor.rgb * envMapIntensity;
   }
 
@@ -126,7 +127,7 @@ uniform vec3 ambientLightColor;
     vec3 reflectVec = reflect( - viewDir, normal );
     reflectVec = normalize( mix( reflectVec, normal, pow4( roughness ) ) );
     reflectVec = transformNormalByInverseViewMatrix( reflectVec, viewMatrix );
-    vec4 envMapColor = textureCubeUV( envMap, reflectVec, roughness );
+    vec4 envMapColor = textureCubeUV( envMap, envMapRotation * reflectVec, roughness );
     return envMapColor.rgb * envMapIntensity;
   }
 #endif

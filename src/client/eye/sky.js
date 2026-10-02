@@ -10,6 +10,9 @@
  * as a real cloud sea does. Through the gaps, far below, a few towns are
  * still lit, and their light warms the haze above them.
  *
+ * Straight overhead is the sun (`SUN`), and it is what lights the eye: the
+ * glint on the glass is its reflection.
+ *
  * Nothing is built out of stacked canvas gradients. The browser dithers each
  * one with the same fixed pattern, and a few hundred of them on top of one
  * another add up to a grid; the soft parts are worked out texel by texel
@@ -52,8 +55,34 @@ const FOG = 9;
 const OCTAVES = 5;
 const ROUGH = 0.56;
 
-/** The way the moon is, round the horizon: the cloud tops facing it are the bright ones. */
-const MOON = 0.9;
+/**
+ * The sun, straight overhead: a white disc, `radius` radians from its middle
+ * to its rim, in a glare that dies away over a few degrees. This high up the
+ * air is too thin to make a day of it, so the sky round it stays black and the
+ * stars stay out. Overhead is also the one place the sky's slow turn leaves
+ * where it is, so the light it gives never moves.
+ */
+export const SUN = Object.freeze({
+  disc: '#fffaf0',
+  glare: '#ffe9c8',
+  radius: 0.022,
+});
+
+/** How bright the glare is just off the disc, and how far it reaches, in radians: a tight core and a wide wash. */
+const GLARE = [[0.55, 0.018], [0.16, 0.09]];
+
+/**
+ * How much of the sun there is `angle` radians from the zenith: how much of
+ * its disc, the rim softened over `edge` radians either way, and how bright
+ * its glare, from 0 to 1 each.
+ */
+export function sunAt(angle, edge = 0.001) {
+  const off = angle - SUN.radius;
+  return {
+    disc: 1 - smoothstep(-edge, edge, off),
+    glare: GLARE.reduce((sum, [at, reach]) => sum + at * Math.exp(-Math.max(0, off) / reach), 0),
+  };
+}
 
 const STAR_COLOURS = ['#ffffff', '#ffffff', '#dfe9ff', '#c4d6ff', '#fff2dc', '#ffd9b0'];
 const LAMP_COLOURS = ['#ffc47a', '#ffd9a3', '#ffb062', '#ffe6c2'];
@@ -168,9 +197,9 @@ function createBand(random) {
  * the horizon at `pitch` radians a row. Each texel looks down at the deck,
  * reads how much cloud is there — leaving out the detail finer than the texel
  * can hold, so the distance hazes instead of fizzing — and shades it: the
- * thick of a bank is its moonlit top, its thin edges are in shadow, the
- * further off it is the more it is haze, and nearest the horizon it takes on
- * the glow and any town's light.
+ * thick of a bank is its top, lit from straight above, its thin edges are in
+ * shadow, the further off it is the more it is haze, and nearest the horizon
+ * it takes on the glow and any town's light.
  */
 export function cloudTexels(data, cols, rows, { pitch, random = Math.random, domes = createDomes(random) }) {
   const noise = createNoise(random);
@@ -183,13 +212,11 @@ export function cloudTexels(data, cols, rows, { pitch, random = Math.random, dom
   const turn = (Math.PI * 2) / cols;
   const cos = new Float32Array(cols);
   const sin = new Float32Array(cols);
-  const moon = new Float32Array(cols);
   const warm = new Float32Array(cols);
   for (let i = 0; i < cols; i++) {
     const lon = (i + 0.5) * turn;
     cos[i] = Math.cos(lon);
     sin[i] = Math.sin(lon);
-    moon[i] = 0.72 + 0.28 * Math.cos(lon - MOON);
     warm[i] = domes(lon);
   }
   // The octaves a row can hold, and how much each counts there.
@@ -250,7 +277,7 @@ export function cloudTexels(data, cols, rows, { pitch, random = Math.random, dom
       const next = (m + 1) * step >= cols ? samples[last] : samples[m + 1];
       const density = samples[m] + (next - samples[m]) * t;
       const cover = smoothstep(COVER - 0.03, COVER + 0.08, density);
-      const height = smoothstep(COVER, COVER + 0.22, density) * moon[i];
+      const height = smoothstep(COVER, COVER + 0.22, density);
       const heat = warm[i] * tint;
       let r = (sr + (lr - sr) * height) * keep + hr;
       let g = (sg + (lg - sg) * height) * keep + hg;
@@ -439,6 +466,24 @@ export function paintSky(ctx, width, height, { random = Math.random, layer = nul
     const [x, y, z] = [0, 1, 2].map((c) => band.a[c] * Math.cos(t) + band.b[c] * Math.sin(t) + band.pole[c] * off);
     star(Math.asin(y / Math.hypot(x, y, z)), Math.atan2(z, x));
   }
+
+  // The sun, overhead. Every row near the top of the map is a ring round the
+  // zenith, so the disc and its glare are laid on a row at a time, each row
+  // as bright as it is near: round, and with no gradient to dither.
+  const disc = rgb(SUN.disc);
+  const glare = rgb(SUN.glare);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let y = 0; y < height; y++) {
+    const sun = sunAt((y + 0.5) / k, 0.5 / k);
+    if (sun.disc <= 0 && sun.glare < 1 / 255) break;
+    if (sun.disc > 0) {
+      ctx.fillStyle = rgba(disc, sun.disc);
+      ctx.fillRect(0, y, width, 1);
+    }
+    ctx.fillStyle = rgba(glare, sun.glare);
+    ctx.fillRect(0, y, width, 1);
+  }
+  ctx.globalCompositeOperation = 'source-over';
 
   // A whisper of grain over all of it, so the long dark ramps dither instead
   // of stepping into bands.

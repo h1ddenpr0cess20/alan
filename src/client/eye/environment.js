@@ -1,24 +1,27 @@
+/** How wide the copy of the sky the glass reflects is, in texels: plenty for a ball this size. */
+const WIDTH = 512;
+
 /**
- * A cold studio for the glass to reflect: a pale softbox high on one side, a
- * thin strip light low on the other, and a dark floor. Glass is mostly its
- * reflections, so these are brighter and harder-edged than an opaque rig
- * would want.
+ * What the glass reflects: the night it hangs in (`sky.js`), sun and all,
+ * shrunk to a size the prefilter takes in its stride. So the bottom of the
+ * ball shows the cloud sea, the top the dark, and the glint high on it is the
+ * sun's — the stage's key light is put where the sun is (`sunlight`), and
+ * there is no lamp anywhere for the glass to show.
+ *
+ * `sky` is the painted canvas; without one there is nothing to reflect.
  */
-export function buildEnvironment({ stage, GFX }) {
+export function buildEnvironment({ stage, GFX, sky }) {
+  if (!sky) return;
   try {
     const c = document.createElement('canvas');
-    c.width = 128; c.height = 64;
+    c.width = WIDTH; c.height = WIDTH / 2;
     const ctx = c.getContext('2d');
-    const g = ctx.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, '#dfe9f7'); g.addColorStop(0.4, '#4a586e');
-    g.addColorStop(0.5, '#141a26'); g.addColorStop(1, '#050609');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 64);
-    ctx.fillStyle = 'rgba(255,255,255,0.98)';
-    ctx.beginPath(); ctx.ellipse(38, 12, 16, 7, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(190,220,255,0.8)';
-    ctx.fillRect(84, 26, 30, 3);
-    ctx.fillStyle = 'rgba(120,170,255,0.35)';
-    ctx.beginPath(); ctx.ellipse(100, 14, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.imageSmoothingQuality = 'high';
+    // A sphere wraps a map round the other way to the way a reflection reads
+    // one, so the copy is turned over to put everything where the backdrop has it.
+    ctx.translate(c.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(sky, 0, 0, c.width, c.height);
     const tex = new GFX.Texture(c);
     tex.mapping = GFX.EquirectangularReflectionMapping;
     tex.colorSpace = GFX.SRGBColorSpace;
@@ -28,4 +31,15 @@ export function buildEnvironment({ stage, GFX }) {
     pmrem.dispose(); tex.dispose();
   } catch {
   }
+}
+
+/**
+ * Light the eye the way the sky says it is lit: by the sun, straight
+ * overhead. The stage's key is moved up there; its fill, a lamp low behind
+ * with nothing in the sky to be, would only put a second glint on the glass,
+ * so it goes out. The stage's soft wash stays: it puts no glint on anything.
+ */
+export function sunlight(stage) {
+  if (stage._key) stage._key.position.set(0, stage._key.position.length(), 0);
+  if (stage._fill) stage._fill.visible = false;
 }

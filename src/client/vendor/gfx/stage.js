@@ -155,6 +155,7 @@ class ThreeDStage extends HTMLElement {
     scene.add(key);
     const fill = new GFX.DirectionalLight(0xfff4e6, 0.5);
     fill.position.set(-5, 3, -4);
+    this._fill = fill;
     scene.add(fill);
 
     const ground = new GFX.Mesh(
